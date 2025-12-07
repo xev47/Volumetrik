@@ -58,7 +58,7 @@ Now built on **Alpine Linux** for an ultra-lightweight container footprint.
 
 ---
 
-## 📸 Screenshot
+## 📸 Screenshots
 
 ![Volumetrik Dashboard](https://raw.githubusercontent.com/xev47/Volumetrik/refs/heads/main/static/screenshoot.png)
 
