@@ -26,10 +26,10 @@
 ### 🚀 Download Latest Version
 Get the latest release for Windows from our GitHub Releases page:
 
-[**⬇️ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/raw/refs/heads/Windows/installers/VolumetrikSetup.exe)
+[**â¬‡ï¸ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/releases)
 
 ### Option 1: Installer (Recommended)
-Download and run the `VolumetrikSetup.exe` installer linked above. This will install Volumetrik on your system and create shortcuts in your Start Menu and Desktop.
+Download and run the `VolumetrikSetup.exe` installer from the releases page. This will install Volumetrik on your system and create shortcuts in your Start Menu and Desktop.
 
 ### Option 2: Portable Executable
 If you prefer not to install anything, you can download the standalone `volumetrik.exe` from the [Releases Page](https://github.com/xev47/Volumetrik/releases) and run it directly.
@@ -72,9 +72,9 @@ If you prefer not to install anything, you can download the standalone `volumetr
    - Or click the **Folder (📂)** icon to browse.
 2. **Scan**: Click the **Scan (🔍)** button.
 3. **Analyze**:
+   - **Directory Browser**: Navigate through subdirectories. Click "📁 .." to go up.
+   - **File Browser**: View files in the current directory.
    - View **Size**, **Usage %**, **File Count**, and **Last Modified** date.
-   - Click on folder names to navigate into them.
-   - Click "Up" to go to the parent directory.
    - Click column headers to sort the results.
 4. **Theme**: Click the Sun/Moon icon in the top right to toggle themes.
 

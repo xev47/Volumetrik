@@ -10,7 +10,6 @@ Compression=lzma2
 SolidCompression=yes
 OutputDir=installers
 OutputBaseFilename=VolumetrikSetup
-; Si vous convertissez votre logo.png en logo.ico, décommentez la ligne suivante :
 SetupIconFile=logo.ico
 
 [Files]
