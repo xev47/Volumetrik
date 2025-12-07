@@ -2,7 +2,7 @@
 ; Basic Information
 AppName=Volumetrik
 AppVersion=0.1.0
-AppPublisher=Odron
+AppPublisher=Xevlive
 DefaultDirName={autopf}\Volumetrik
 DefaultGroupName=Volumetrik
 UninstallDisplayIcon={app}\volumetrik.exe
@@ -11,12 +11,13 @@ SolidCompression=yes
 OutputDir=installers
 OutputBaseFilename=VolumetrikSetup
 SetupIconFile=logo.ico
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 ; The main executable
 Source: "target\release\volumetrik.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Include the logo if needed (though it's embedded in the exe now)
-Source: "logo.png"; DestDir: "{app}"; Flags: ignoreversion
+Source: "logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start Menu shortcut

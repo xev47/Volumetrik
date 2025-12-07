@@ -4,6 +4,8 @@
 
 **Volumetrik** is a blazing fast desktop tool designed to visualize disk usage on Windows. Built with performance in mind using Rust's parallel computing capabilities and the `eframe` GUI library, it provides a sleek, native interface to explore your file system and identify large directories.
 
+![Volumetrik Screenshot](static/screenshoot3.png)
+
 ---
 
 ## ✨ Features
