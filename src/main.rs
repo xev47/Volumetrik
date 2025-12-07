@@ -37,7 +37,7 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 800.0])
+            .with_inner_size([1600.0, 1000.0])
             .with_title("Volumetrik")
             .with_min_inner_size([800.0, 600.0])
             .with_icon(load_icon()),
@@ -72,6 +72,7 @@ struct VolumetrikApp {
 struct ScanResult {
     files: Vec<FileStats>,
     analysis: ScanAnalysis,
+    scanned_path: String,
 }
 
 #[derive(PartialEq)]
@@ -138,6 +139,7 @@ impl VolumetrikApp {
                     *result_clone.lock().unwrap() = Some(ScanResult {
                         files,
                         analysis,
+                        scanned_path: path.clone(),
                     });
                 }
                 Err(e) => {
@@ -201,8 +203,9 @@ impl eframe::App for VolumetrikApp {
         let mut trigger_scan = false;
 
         // --- Header ---
-        egui::TopBottomPanel::top("header").show(ctx, |ui| {
-            ui.add_space(8.0);
+        egui::TopBottomPanel::top("header")
+            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(egui::Margin::symmetric(20.0, 8.0)))
+            .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if let Some(texture) = &self.icon_texture {
                     ui.add(egui::Image::new(texture).max_height(32.0));
@@ -259,10 +262,11 @@ impl eframe::App for VolumetrikApp {
                     }
                 });
             });
-            ui.add_space(8.0);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(0.0))
+            .show(ctx, |ui| {
             let is_scanning = *self.is_scanning.lock().unwrap();
             if is_scanning {
                 ui.centered_and_justified(|ui| {
@@ -283,8 +287,10 @@ impl eframe::App for VolumetrikApp {
             let result_lock = scan_result_arc.lock().unwrap();
             if let Some(result) = &*result_lock {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    // --- Dashboard & Charts ---
-                    ui.add_space(10.0);
+                    egui::Frame::none().inner_margin(egui::Margin::symmetric(20.0, 10.0)).show(ui, |ui| {
+                        ui.set_min_width(ui.available_width()); // Ensure content fills width to respect margins
+                        // --- Dashboard & Charts ---
+                        ui.add_space(10.0);
                     
                     let dashboard_width = 250.0 + 40.0 + 500.0;
                     let available_width = ui.available_width();
@@ -334,7 +340,12 @@ impl eframe::App for VolumetrikApp {
 
                         // Right side: Chart
                         ui.vertical(|ui| {
-                            ui.heading("File Type Distribution");
+                            let folder_name = std::path::Path::new(&result.scanned_path)
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| result.scanned_path.clone());
+                            
+                            ui.heading(format!("File Type Distribution ({})", folder_name));
                             ui.add_space(10.0);
                             
                             let mut extensions: Vec<_> = result.analysis.extension_distribution.iter().collect();
@@ -368,22 +379,34 @@ impl eframe::App for VolumetrikApp {
                                     
                                     if angle_span > 0.0 {
                                         let steps = (angle_span * radius).max(2.0) as usize;
+                                        let mut mesh = egui::Mesh::default();
                                         
-                                        for i in 0..steps {
-                                            let a0 = current_angle + (i as f32 / steps as f32) * angle_span;
-                                            let a1 = current_angle + ((i + 1) as f32 / steps as f32) * angle_span;
+                                        for i in 0..=steps {
+                                            let angle = current_angle + (i as f32 / steps as f32) * angle_span;
+                                            let cos = angle.cos();
+                                            let sin = angle.sin();
                                             
-                                            let p0_out = center + egui::vec2(a0.cos(), a0.sin()) * radius;
-                                            let p1_out = center + egui::vec2(a1.cos(), a1.sin()) * radius;
-                                            let p0_in = center + egui::vec2(a0.cos(), a0.sin()) * inner_radius;
-                                            let p1_in = center + egui::vec2(a1.cos(), a1.sin()) * inner_radius;
+                                            let p_out = center + egui::vec2(cos, sin) * radius;
+                                            let p_in = center + egui::vec2(cos, sin) * inner_radius;
                                             
-                                            painter.add(egui::Shape::convex_polygon(
-                                                vec![p0_out, p1_out, p1_in, p0_in],
-                                                *color,
-                                                egui::Stroke::NONE
-                                            ));
+                                            mesh.vertices.push(egui::epaint::Vertex {
+                                                pos: p_out,
+                                                uv: egui::Pos2::ZERO,
+                                                color: *color,
+                                            });
+                                            mesh.vertices.push(egui::epaint::Vertex {
+                                                pos: p_in,
+                                                uv: egui::Pos2::ZERO,
+                                                color: *color,
+                                            });
+                                            
+                                            if i > 0 {
+                                                let base = ((i - 1) * 2) as u32;
+                                                mesh.add_triangle(base, base + 1, base + 3);
+                                                mesh.add_triangle(base, base + 3, base + 2);
+                                            }
                                         }
+                                        painter.add(egui::Shape::mesh(mesh));
                                         current_angle += angle_span;
                                     }
                                 }
@@ -413,30 +436,32 @@ impl eframe::App for VolumetrikApp {
 
                     // --- File Browser ---
                     // Filter files
-                    let mut files: Vec<FileStats> = result.files.iter()
+                    let filtered_files: Vec<FileStats> = result.files.iter()
                         .filter(|f| self.filter_text.is_empty() || f.name.to_lowercase().contains(&self.filter_text.to_lowercase()))
                         .cloned()
                         .collect();
 
-                    // Sort files
-                    files.sort_by(|a, b| {
-                        let cmp = match self.sort_column {
-                            SortColumn::Name => a.name.cmp(&b.name),
-                            SortColumn::Size => a.size.cmp(&b.size),
-                            SortColumn::Count => a.file_count.cmp(&b.file_count),
-                            SortColumn::Modified => a.modified.cmp(&b.modified),
-                        };
-                        if self.sort_descending { cmp.reverse() } else { cmp }
-                    });
+                    let (mut directories, mut leaf_files): (Vec<_>, Vec<_>) = filtered_files.into_iter().partition(|f| f.is_dir);
 
-                    ui.push_id("file_browser", |ui| {
+                    // Sort helper
+                    let sort_files = |files: &mut Vec<FileStats>, column: &SortColumn, descending: bool| {
+                        files.sort_by(|a, b| {
+                            let cmp = match column {
+                                SortColumn::Name => a.name.cmp(&b.name),
+                                SortColumn::Size => a.size.cmp(&b.size),
+                                SortColumn::Count => a.file_count.cmp(&b.file_count),
+                                SortColumn::Modified => a.modified.cmp(&b.modified),
+                            };
+                            if descending { cmp.reverse() } else { cmp }
+                        });
+                    };
+
+                    sort_files(&mut directories, &self.sort_column, self.sort_descending);
+                    sort_files(&mut leaf_files, &self.sort_column, self.sort_descending);
+
+                    ui.push_id("directory_browser", |ui| {
                         ui.horizontal(|ui| {
-                            ui.heading("File Browser");
-                            if let Some(parent) = std::path::Path::new(&self.current_path).parent() {
-                                if ui.button("⬆ Up").clicked() {
-                                    *next_path.borrow_mut() = Some(parent.to_string_lossy().to_string());
-                                }
-                            }
+                            ui.heading("Directory Browser");
                             ui.add_space(20.0);
                             ui.label("Filter:");
                             ui.add(egui::TextEdit::singleline(&mut self.filter_text).hint_text("Search..."));
@@ -447,31 +472,40 @@ impl eframe::App for VolumetrikApp {
                         TableBuilder::new(ui)
                             .striped(true)
                             .resizable(true)
-                            .vscroll(false) // Disable internal scroll, use outer ScrollArea
-                            .min_scrolled_height(0.0) // Allow table to be as tall as needed
-                            .column(Column::remainder().at_least(250.0).resizable(true)) // Name
-                            .column(Column::auto().at_least(120.0).resizable(true)) // Size
-                            .column(Column::auto().at_least(100.0).resizable(true)) // Usage %
-                            .column(Column::auto().at_least(100.0).resizable(true))  // Count
-                            .column(Column::auto().at_least(140.0).resizable(true)) // Modified
+                            .vscroll(false)
+                            .min_scrolled_height(0.0)
+                            .column(Column::remainder().at_least(250.0).resizable(true))
+                            .column(Column::auto().at_least(120.0).resizable(true))
+                            .column(Column::auto().at_least(100.0).resizable(true))
+                            .column(Column::auto().at_least(100.0).resizable(true))
+                            .column(Column::auto().at_least(140.0).resizable(true))
                             .header(20.0, |mut header| {
-                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Filename ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Name; self.sort_descending = !self.sort_descending; } });
-                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Storage Usage ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Size; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Name ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Name; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Size ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Size; self.sort_descending = !self.sort_descending; } });
                                 header.col(|ui| { ui.label(egui::RichText::new("Usage %").heading().size(14.0)); });
-                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("File Count ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Count; self.sort_descending = !self.sort_descending; } });
-                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Last Modified ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Modified; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Count ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Count; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Modified ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Modified; self.sort_descending = !self.sort_descending; } });
                             })
                             .body(|mut body| {
-                                for file in &files {
+                                if let Some(parent) = std::path::Path::new(&self.current_path).parent() {
                                     body.row(20.0, |mut row| {
                                         row.col(|ui| {
-                                            let icon = if file.is_dir { "📁" } else { "📄" };
-                                            if file.is_dir {
-                                                if ui.add(egui::Button::new(egui::RichText::new(format!("{} {}", icon, file.name)).color(egui::Color32::from_rgb(100, 150, 255))).frame(false)).clicked() {
-                                                    *next_path.borrow_mut() = Some(file.path.clone());
-                                                }
-                                            } else {
-                                                ui.label(format!("{} {}", icon, file.name));
+                                            if ui.add(egui::Button::new(egui::RichText::new("📁 ..").color(egui::Color32::from_rgb(100, 150, 255))).frame(false)).clicked() {
+                                                *next_path.borrow_mut() = Some(parent.to_string_lossy().to_string());
+                                            }
+                                        });
+                                        row.col(|ui| { ui.label(""); });
+                                        row.col(|ui| { ui.label(""); });
+                                        row.col(|ui| { ui.label(""); });
+                                        row.col(|ui| { ui.label(""); });
+                                    });
+                                }
+
+                                for file in &directories {
+                                    body.row(20.0, |mut row| {
+                                        row.col(|ui| {
+                                            if ui.add(egui::Button::new(egui::RichText::new(format!("📁 {}", file.name)).color(egui::Color32::from_rgb(100, 150, 255))).frame(false)).clicked() {
+                                                *next_path.borrow_mut() = Some(file.path.clone());
                                             }
                                         });
                                         row.col(|ui| { 
@@ -485,17 +519,13 @@ impl eframe::App for VolumetrikApp {
                                             } else { 0.0 };
                                             let bar = egui::ProgressBar::new(percent as f32)
                                                 .show_percentage()
-                                                .fill(egui::Color32::from_rgb(0, 120, 215)) // Blue color
+                                                .fill(egui::Color32::from_rgb(0, 120, 215))
                                                 .animate(false);
                                             ui.add(bar);
                                         });
                                         row.col(|ui| { 
                                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                if file.is_dir {
-                                                    ui.label(file.file_count.to_string());
-                                                } else {
-                                                    ui.label("-");
-                                                }
+                                                ui.label(file.file_count.to_string());
                                             });
                                         });
                                         row.col(|ui| { ui.label(self.format_date(file.modified)); })
@@ -521,6 +551,76 @@ impl eframe::App for VolumetrikApp {
                     });
 
                     ui.add_space(20.0);
+
+                    ui.push_id("file_browser_list", |ui| {
+                        ui.heading("File Browser");
+                        ui.add_space(5.0);
+
+                        TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .vscroll(false)
+                            .min_scrolled_height(0.0)
+                            .column(Column::remainder().at_least(250.0).resizable(true))
+                            .column(Column::auto().at_least(120.0).resizable(true))
+                            .column(Column::auto().at_least(100.0).resizable(true))
+                            .column(Column::auto().at_least(100.0).resizable(true))
+                            .column(Column::auto().at_least(140.0).resizable(true))
+                            .header(20.0, |mut header| {
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Name ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Name; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Size ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Size; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { ui.label(egui::RichText::new("Usage %").heading().size(14.0)); });
+                                header.col(|ui| { ui.label(egui::RichText::new("").heading().size(14.0)); });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Modified ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Modified; self.sort_descending = !self.sort_descending; } });
+                            })
+                            .body(|mut body| {
+                                for file in &leaf_files {
+                                    body.row(20.0, |mut row| {
+                                        row.col(|ui| {
+                                            ui.label(format!("📄 {}", file.name));
+                                        });
+                                        row.col(|ui| { 
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                ui.label(Self::format_size(file.size)); 
+                                            });
+                                        });
+                                        row.col(|ui| {
+                                            let percent = if result.analysis.total_size > 0 {
+                                                file.size as f64 / result.analysis.total_size as f64
+                                            } else { 0.0 };
+                                            let bar = egui::ProgressBar::new(percent as f32)
+                                                .show_percentage()
+                                                .fill(egui::Color32::from_rgb(0, 120, 215))
+                                                .animate(false);
+                                            ui.add(bar);
+                                        });
+                                        row.col(|ui| { 
+                                            ui.label("-");
+                                        });
+                                        row.col(|ui| { ui.label(self.format_date(file.modified)); })
+                                            .1
+                                            .context_menu(|ui| {
+                                                if ui.button("Open").clicked() {
+                                                    Self::open_path(&file.path);
+                                                    ui.close_menu();
+                                                }
+                                                if ui.button("Open in Explorer").clicked() {
+                                                    #[cfg(target_os = "windows")]
+                                                    std::process::Command::new("explorer")
+                                                        .arg("/select,")
+                                                        .arg(&file.path)
+                                                        .spawn()
+                                                        .ok();
+                                                    ui.close_menu();
+                                                }
+                                            });
+                                    });
+                                }
+                            });
+                    });
+
+                    ui.add_space(20.0);
+                    });
                 });
 
                 // Handle navigation clicks (hacky workaround for closure capture)
