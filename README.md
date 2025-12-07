@@ -1,17 +1,8 @@
-![Volumetrik Logo](https://raw.githubusercontent.com/xev47/volumetrik/main/static/logo_volumetrik_mini.png) 
-## Volumetrik
+# Volumetrik (Windows Edition)
 
-> **A high-performance, modern disk usage analyzer and monitoring tool built with Rust.**
+> **A high-performance, native disk usage analyzer built with Rust and egui.**
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/xev47/volumetrik)](https://hub.docker.com/r/xev47/volumetrik)
-[![Docker Image Size](https://img.shields.io/docker/image-size/xev47/volumetrik)](https://hub.docker.com/r/xev47/volumetrik)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-[**View on Docker Hub**](https://hub.docker.com/r/xev47/volumetrik)
-
-**Volumetrik** is a blazing fast tool designed to visualize disk usage and monitor storage health. Built with performance in mind using Rust's parallel computing capabilities, it provides a sleek, modern web interface to explore your file system, identify large directories, and receive alerts when storage thresholds are breached.
-
-Now built on **Alpine Linux** for an ultra-lightweight container footprint.
+**Volumetrik** is a blazing fast desktop tool designed to visualize disk usage on Windows. Built with performance in mind using Rust's parallel computing capabilities and the `eframe` GUI library, it provides a sleek, native interface to explore your file system and identify large directories.
 
 ---
 
@@ -19,119 +10,78 @@ Now built on **Alpine Linux** for an ultra-lightweight container footprint.
 
 ### 🚀 Performance & Core
 - **Ultra-Fast Scanning**: Leverages `rayon` for multi-threaded directory traversal, capable of processing millions of files in seconds.
-- **Alpine Base**: The Docker image is built on **Alpine Linux**, ensuring a minimal security surface and small download size.
-- **Docker Ready**: Optimized for containerized deployment with easy volume mapping.
+- **Native Windows App**: Built with `eframe` (egui) for a responsive, lightweight desktop experience.
+- **Low Memory Footprint**: Efficient resource usage compared to Electron-based alternatives.
 
-### 🖥️ Modern Dashboard
-- **Customizable Layout**: Drag-and-drop widgets using **GridStack**. Resize and rearrange panels to fit your workflow. Includes a "Reset Layout" option.
-- **Interactive Charts**: Visual breakdown of file types using responsive Bar and Doughnut charts.
-- **Theming**: 
-  - **Dark/Light Mode**: Toggle between light and dark themes.
-  - **Color Palettes**: Choose from multiple accent palettes: **Default (Slate), Ocean, Sunset, Forest, and Purple**.
-- **File Browser**: Integrated web-based file browser to navigate and select scan targets directly from the UI.
-
-### 🌍 Internationalization
-- Fully localized interface available in:
-  - 🇺🇸 English
-  - 🇫🇷 French
-  - 🇪🇸 Spanish
-  - 🇩🇪 German
-  - 🇮🇹 Italian
-  - 🇨🇳 Chinese (Simplified)
-  - 🇯🇵 Japanese
-
-### 🔔 Advanced Monitoring & Alerts
-- **Background Watchdog**: Continuously monitor multiple paths in the background.
-- **Threshold Types**:
-  - **Max Used**: Trigger alert when a folder exceeds a specific size (GB).
-  - **Min Remaining**: Trigger alert when free disk space falls below a specific limit (GB).
-- **Multi-Channel Notifications**:
-  - **Telegram**
-  - **Slack**
-  - **Discord**
-  - **Microsoft Teams**
-  - **Pushover**
-  - **Gotify**
-  - **Ntfy**
-  - **Generic Webhooks**
-- **Customizable Messages**: Define your own alert payload templates using variables like `{path}` and `{threshold}`.
+### 🖥️ Modern Interface
+- **Dark & Light Mode**: Toggle between themes to match your system preference.
+- **Interactive File Browser**: Navigate your file system directly within the app.
+- **Sorting & Filtering**: Sort files by size, name, file count, or modification date.
+- **Visual Feedback**: Progress bars for storage usage and scanning status.
 
 ---
 
-## 📸 Screenshots
+## 📥 Installation
 
-![Volumetrik Dashboard](https://raw.githubusercontent.com/xev47/Volumetrik/refs/heads/main/static/screenshoot.png)
+### Option 1: Installer (Recommended)
+Download and run the `VolumetrikSetup.exe` installer to install Volumetrik on your system. This will create shortcuts in your Start Menu and Desktop.
 
-![Volumetrik Configuration](https://raw.githubusercontent.com/xev47/Volumetrik/refs/heads/main/static/screenshoot2.png)
+### Option 2: Portable Executable
+You can also download the standalone `volumetrik.exe` and run it directly without installation.
 
-## 🚀 Quick Start with Docker
+---
 
-The easiest way to run Volumetrik is using Docker.
+## 🛠️ Build from Source
 
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -v /:/host:ro \
-  -v volumetrik_data:/app/settings \
-  --name Volumetrik \
-  xev47/volumetrik:latest
-```
+### Prerequisites
+- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
+- [Inno Setup](https://jrsoftware.org/isinfo.php) (optional, for creating the installer)
 
-Then open your browser at **[http://localhost:8080](http://localhost:8080)**.
+### Steps
 
-> **Note**: 
-> 1. We mount the host root `/` to `/host` inside the container in read-only mode (`:ro`) so Volumetrik can scan your entire drive safely.
-> 2. We mount a volume to `/app/settings` to persist your configuration (language, monitoring paths, alerts, layout) across restarts.
+1. **Clone the repository**
+   ```powershell
+   git clone https://github.com/yourusername/volumetrik.git
+   cd volumetrik
+   ```
+
+2. **Build for Release**
+   This command compiles the application and embeds the application icon.
+   ```powershell
+   cargo build --release
+   ```
+   The executable will be located at `target/release/volumetrik.exe`.
+
+3. **Create Installer (Optional)**
+   If you have Inno Setup installed, you can generate the installer:
+   - Open `volumetrik.iss`
+   - Click "Compile"
+   - The installer will be generated in the `installers/` directory.
+
+---
+
+## 📖 Usage
+
+1. **Select a Folder**: 
+   - Type the path in the top bar and press Enter.
+   - Or click the **Folder (📂)** icon to browse.
+2. **Scan**: Click the **Scan (🔍)** button.
+3. **Analyze**:
+   - View **Size**, **Usage %**, **File Count**, and **Last Modified** date.
+   - Click on folder names to navigate into them.
+   - Click "Up" to go to the parent directory.
+   - Click column headers to sort the results.
+4. **Theme**: Click the Sun/Moon icon in the top right to toggle themes.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Core**: [Rust](https://www.rust-lang.org/) 🦀 (Actix-web, Rayon, Tokio, Serde)
-- **Frontend**: HTML5, CSS3, Vanilla JS, [Chart.js](https://www.chartjs.org/), [GridStack.js](https://gridstackjs.com/)
-- **Container**: Alpine Linux
-
-## 📖 Usage
-
-1. **Select a Folder**: Click the folder icon 📂. Use the built-in file browser to select a target directory (start at `/host` if using Docker).
-2. **Scan**: Hit the "Scan" button. You can stop the scan at any time.
-3. **Analyze**:
-   - View **Total Size**, **File Count**, and **Disk Availability**.
-   - Check the **File Type Distribution** to see which extensions consume the most space.
-   - Use the **File List** to sort by size, name, percent usage, or date.
-   - Click on any folder in the list or chart to **drill down**.
-4. **Configure**:
-   - Click the **Settings (⚙️)** icon to access the configuration menu.
-   - **General**: Change language, color palette, or reset the dashboard layout.
-   - **Monitoring**: Add paths to watch and set check intervals.
-   - **Notifications**: Configure your preferred alert services.
-
-## 🐳 Docker Compose
-
-If you prefer `docker-compose.yml`:
-
-```yaml
-services:
-  Volumetrik:
-    image: xev47/volumetrik:latest
-    container_name: Volumetrik
-    ports:
-      - "8080:8080"
-    volumes:
-      - /:/host:ro
-      - ./settings:/app/settings
-    restart: unless-stopped
-    environment:
-      - RUST_LOG=info
-      - APP_ENV=docker
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to open an issue or submit a pull request on GitHub.
+- **Language**: [Rust](https://www.rust-lang.org/) 🦀
+- **GUI Framework**: [eframe / egui](https://github.com/emilk/egui)
+- **Parallelism**: [Rayon](https://github.com/rayon-rs/rayon)
+- **Image Handling**: [image](https://github.com/image-rs/image)
 
 ## 📝 License
 
 This project is licensed under the MIT License.
-
----
