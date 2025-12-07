@@ -15,6 +15,14 @@ Now built on **Alpine Linux** for an ultra-lightweight container footprint.
 
 ---
 
+## 🪟 Windows Version
+
+Get the latest release for Windows from our GitHub Releases page:
+
+[**⬇️ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/blob/Windows/installers/VolumetrikSetup.exe)
+
+---
+
 ## ✨ Features
 
 ### 🚀 Performance & Core
