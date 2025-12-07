@@ -26,7 +26,7 @@
 ### 🚀 Download Latest Version
 Get the latest release for Windows from our GitHub Releases page:
 
-[**â¬‡ï¸ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/raw/refs/heads/Windows/installers/VolumetrikSetup.exe)
+[**Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/raw/refs/heads/Windows/installers/VolumetrikSetup.exe)
 
 ---
 
