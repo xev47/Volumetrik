@@ -26,13 +26,7 @@
 ### 🚀 Download Latest Version
 Get the latest release for Windows from our GitHub Releases page:
 
-[**â¬‡ï¸ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/releases)
-
-### Option 1: Installer (Recommended)
-Download and run the `VolumetrikSetup.exe` installer from the releases page. This will install Volumetrik on your system and create shortcuts in your Start Menu and Desktop.
-
-### Option 2: Portable Executable
-If you prefer not to install anything, you can download the standalone `volumetrik.exe` from the [Releases Page](https://github.com/xev47/Volumetrik/releases) and run it directly.
+[**â¬‡ï¸ Download Volumetrik Installer**](https://github.com/xev47/Volumetrik/raw/refs/heads/Windows/installers/VolumetrikSetup.exe)
 
 ---
 
