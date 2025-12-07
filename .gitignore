@@ -12,3 +12,4 @@ target/
 .DS_Store
 rustup-init.exe
 vs_buildtools.exe
+!installers/VolumetrikSetup.exe
