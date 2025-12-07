@@ -1,5 +1,6 @@
-use crate::models::FileStats;
+use crate::models::{FileStats, ScanAnalysis, ExtensionStats};
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::fs::{self, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -10,19 +11,6 @@ pub fn calculate_size(path: &Path) -> (u64, u64) {
     let mut count = 0;
 
     if let Ok(entries) = fs::read_dir(path) {
-        // We collect entries to a vector to parallelize if the directory is huge,
-        // but for deep recursion, spawning too many tasks can be overhead.
-        // A hybrid approach: sequential for small dirs, parallel for top levels?
-        // For simplicity and robustness in deep recursion, let's stick to sequential
-        // inside the deep recursion to avoid thread exhaustion, but parallelize the top-level scan.
-        // Actually, rayon handles work-stealing well.
-        
-        // However, for a simple `calculate_size`, sequential is often faster due to syscall overhead
-        // unless we are on a very slow filesystem.
-        // Let's try a pure sequential recursive approach for the "deep" calculation
-        // to ensure we don't explode the stack or thread pool, 
-        // but we will parallelize the *immediate children* of the requested folder in `scan_path`.
-        
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_symlink() {
@@ -53,7 +41,7 @@ fn get_metadata_time(metadata: &Metadata) -> u64 {
         .as_secs()
 }
 
-pub fn scan_path(path_str: &str) -> Result<(Vec<FileStats>, u64, u64), std::io::Error> {
+pub fn scan_path(path_str: &str) -> Result<(Vec<FileStats>, ScanAnalysis), std::io::Error> {
     let path = PathBuf::from(path_str);
     let entries = fs::read_dir(&path)?;
 
@@ -96,9 +84,31 @@ pub fn scan_path(path_str: &str) -> Result<(Vec<FileStats>, u64, u64), std::io::
         })
         .collect();
 
-    // Calculate totals for the current directory
-    let total_size: u64 = results.iter().map(|f| f.size).sum();
-    let total_files: u64 = results.iter().map(|f| f.file_count).sum();
+    // Calculate totals and distribution
+    let mut total_size = 0;
+    let mut total_files = 0;
+    let mut extension_distribution = HashMap::new();
 
-    Ok((results, total_size, total_files))
+    for file in &results {
+        total_size += file.size;
+        total_files += file.file_count;
+
+        if !file.is_dir {
+            let ext = std::path::Path::new(&file.name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("unknown")
+                .to_lowercase();
+            
+            let stats = extension_distribution.entry(ext).or_insert(ExtensionStats::default());
+            stats.size += file.size;
+            stats.count += 1;
+        }
+    }
+
+    Ok((results, ScanAnalysis {
+        total_size,
+        total_files,
+        extension_distribution,
+    }))
 }

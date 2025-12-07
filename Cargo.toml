@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-web = "4"
-actix-files = "0.6"
-actix-cors = "0.6"
+eframe = "0.29.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rayon = "1.7"
@@ -16,6 +14,8 @@ log = "0.4"
 env_logger = "0.10"
 num_cpus = "1.0"
 rfd = "0.14"
-reqwest = { version = "0.12.24", default-features = false, features = ["json", "blocking", "rustls-tls"] }
-tokio = { version = "1.48.0", features = ["full"] }
-sysinfo = "0.37.2"
+egui_extras = "0.29.1"
+image = "0.25.9"
+
+[build-dependencies]
+winres = "0.1"
