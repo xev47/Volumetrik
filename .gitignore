@@ -1,0 +1,14 @@
+target/
+**/*.rs.bk
+*.pdb
+*.exe
+*.dll
+*.so
+*.dylib
+*.log
+.env
+.vscode/
+.idea/
+.DS_Store
+rustup-init.exe
+vs_buildtools.exe

@@ -1,0 +1,13 @@
+services:
+  volumetrik:
+    build: .
+    image: xev47/volumetrik:latest
+    container_name: volumetrik
+    expose:
+      - "8080"
+    volumes:
+      - /:/host:ro
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      - APP_ENV=docker

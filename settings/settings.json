@@ -1,0 +1,67 @@
+{
+  "language": "en",
+  "monitoring": {
+    "enabled": false,
+    "paths": [
+      {
+        "path": "/",
+        "threshold_type": "MaxUsed",
+        "threshold_value": 100.0
+      }
+    ],
+    "check_interval_minutes": 60
+  },
+  "alerts": {
+    "enabled": false,
+    "telegram_bot_token": null,
+    "telegram_chat_id": null,
+    "webhook_url": null,
+    "custom_message": null,
+    "pushover_user_key": null,
+    "pushover_api_token": null,
+    "gotify_url": null,
+    "gotify_token": null,
+    "slack_webhook_url": null,
+    "discord_webhook_url": null,
+    "teams_webhook_url": null,
+    "ntfy_url": null,
+    "ntfy_token": null
+  },
+  "layout": [
+    {
+      "h": 10,
+      "id": "widget-largedirs",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "h": 10,
+      "id": "widget-browser",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "h": 7,
+      "id": "widget-filetypes",
+      "w": 6,
+      "x": 0,
+      "y": 10
+    },
+    {
+      "h": 7,
+      "id": "widget-toptypes",
+      "w": 6,
+      "x": 6,
+      "y": 10
+    },
+    {
+      "h": 3,
+      "id": "widget-diskspace",
+      "w": 12,
+      "x": 0,
+      "y": 17
+    }
+  ]
+}
