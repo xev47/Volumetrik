@@ -65,6 +65,7 @@ struct VolumetrikApp {
     sort_column: SortColumn,
     sort_descending: bool,
     icon_texture: Option<egui::TextureHandle>,
+    filter_text: String,
 }
 
 #[derive(Clone)]
@@ -118,6 +119,7 @@ impl VolumetrikApp {
             sort_column: SortColumn::Size,
             sort_descending: true,
             icon_texture,
+            filter_text: String::new(),
         }
     }
 
@@ -146,7 +148,7 @@ impl VolumetrikApp {
         });
     }
 
-    fn format_size(&self, bytes: u64) -> String {
+    fn format_size(bytes: u64) -> String {
         const KB: u64 = 1024;
         const MB: u64 = KB * 1024;
         const GB: u64 = MB * 1024;
@@ -172,6 +174,25 @@ impl VolumetrikApp {
             "-".to_string()
         }
     }
+
+    fn open_path(path: &str) {
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("explorer")
+                .arg(path)
+                .spawn()
+                .ok();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // Fallback for other OSs if needed
+            if let Ok(mut child) = std::process::Command::new("xdg-open").arg(path).spawn() {
+                child.wait().ok();
+            } else {
+                std::process::Command::new("open").arg(path).spawn().ok();
+            }
+        }
+    }
 }
 
 impl eframe::App for VolumetrikApp {
@@ -191,24 +212,31 @@ impl eframe::App for VolumetrikApp {
                 ui.heading("Volumetrik");
                 ui.add_space(20.0);
 
-                let response = ui.add_sized(
-                    [ui.available_width() - 250.0, 24.0], 
-                    egui::TextEdit::singleline(&mut self.current_path)
-                );
-                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    trigger_scan = true;
-                }
-
-                if ui.add(egui::Button::new(egui::RichText::new("📂").size(20.0))).on_hover_text("Browse").clicked() {
-                    if let Some(path) = FileDialog::new().pick_folder() {
-                        *next_path.borrow_mut() = Some(path.to_string_lossy().to_string());
-                    }
-                }
-
-                if ui.add(egui::Button::new(egui::RichText::new("🔍 Scan").size(20.0))).clicked() {
-                    trigger_scan = true;
-                }
+                // Breadcrumbs
+                let path = std::path::Path::new(&self.current_path);
+                let ancestors: Vec<_> = path.ancestors().collect();
+                let ancestors_rev: Vec<_> = ancestors.into_iter().rev().collect();
                 
+                egui::ScrollArea::horizontal().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for (i, ancestor) in ancestors_rev.iter().enumerate() {
+                            let label = if let Some(name) = ancestor.file_name() {
+                                name.to_string_lossy().to_string()
+                            } else {
+                                ancestor.to_string_lossy().to_string()
+                            };
+
+                            if i > 0 {
+                                ui.label(">");
+                            }
+                            
+                            if ui.button(label).clicked() {
+                                *next_path.borrow_mut() = Some(ancestor.to_string_lossy().to_string());
+                            }
+                        }
+                    });
+                });
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let is_dark = ctx.style().visuals.dark_mode;
                     let icon = if is_dark { "☀" } else { "🌙" };
@@ -217,6 +245,16 @@ impl eframe::App for VolumetrikApp {
                             ctx.set_visuals(egui::Visuals::light());
                         } else {
                             ctx.set_visuals(egui::Visuals::dark());
+                        }
+                    }
+                    
+                    if ui.add(egui::Button::new(egui::RichText::new("🔍 Scan").size(20.0))).clicked() {
+                        trigger_scan = true;
+                    }
+
+                    if ui.add(egui::Button::new(egui::RichText::new("📂").size(20.0))).on_hover_text("Browse").clicked() {
+                        if let Some(path) = FileDialog::new().pick_folder() {
+                            *next_path.borrow_mut() = Some(path.to_string_lossy().to_string());
                         }
                     }
                 });
@@ -244,79 +282,245 @@ impl eframe::App for VolumetrikApp {
             let scan_result_arc = self.scan_result.clone();
             let result_lock = scan_result_arc.lock().unwrap();
             if let Some(result) = &*result_lock {
-                // Sort files
-                let mut files = result.files.clone();
-                files.sort_by(|a, b| {
-                    let cmp = match self.sort_column {
-                        SortColumn::Name => a.name.cmp(&b.name),
-                        SortColumn::Size => a.size.cmp(&b.size),
-                        SortColumn::Count => a.file_count.cmp(&b.file_count),
-                        SortColumn::Modified => a.modified.cmp(&b.modified),
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    // --- Dashboard & Charts ---
+                    ui.add_space(10.0);
+                    
+                    let dashboard_width = 250.0 + 40.0 + 500.0;
+                    let available_width = ui.available_width();
+                    let margin = if available_width > dashboard_width {
+                        (available_width - dashboard_width) / 2.0
+                    } else {
+                        0.0
                     };
-                    if self.sort_descending { cmp.reverse() } else { cmp }
-                });
 
-                // File Browser
-                ui.push_id("file_browser", |ui| {
                     ui.horizontal(|ui| {
-                        ui.heading("File Browser");
-                        if let Some(parent) = std::path::Path::new(&self.current_path).parent() {
-                            if ui.button("⬆ Up").clicked() {
-                                *next_path.borrow_mut() = Some(parent.to_string_lossy().to_string());
-                            }
-                        }
-                    });
-                    ui.label(egui::RichText::new(&self.current_path).weak());
-                    ui.add_space(5.0);
-
-                    TableBuilder::new(ui)
-                        .striped(true)
-                        .resizable(true)
-                        .vscroll(true)
-                        .column(Column::remainder().at_least(250.0).resizable(true)) // Name
-                        .column(Column::auto().at_least(120.0).resizable(true)) // Size
-                        .column(Column::auto().at_least(100.0).resizable(true)) // Usage %
-                        .column(Column::auto().at_least(100.0).resizable(true))  // Count
-                        .column(Column::auto().at_least(140.0).resizable(true)) // Modified
-                        .header(20.0, |mut header| {
-                            header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Filename ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Name; self.sort_descending = !self.sort_descending; } });
-                            header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Storage Usage ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Size; self.sort_descending = !self.sort_descending; } });
-                            header.col(|ui| { ui.label(egui::RichText::new("Usage %").heading().size(14.0)); });
-                            header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("File Count ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Count; self.sort_descending = !self.sort_descending; } });
-                            header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Last Modified ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Modified; self.sort_descending = !self.sort_descending; } });
-                        })
-                        .body(|mut body| {
-                            for file in &files {
-                                body.row(20.0, |mut row| {
-                                    row.col(|ui| {
-                                        let icon = if file.is_dir { "📁" } else { "📄" };
-                                        if file.is_dir {
-                                            if ui.link(format!("{} {}", icon, file.name)).clicked() {
-                                                *next_path.borrow_mut() = Some(file.path.clone());
-                                            }
-                                        } else {
-                                            ui.label(format!("{} {}", icon, file.name));
-                                        }
+                        ui.add_space(margin);
+                        
+                        // Left side: Cards
+                        ui.vertical(|ui| {
+                            ui.set_width(250.0);
+                            
+                            // Card 1: Total Size
+                            egui::Frame::group(ui.style())
+                                .fill(ui.style().visuals.faint_bg_color)
+                                .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.noninteractive.bg_stroke.color))
+                                .rounding(egui::Rounding::same(4.0))
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.vertical(|ui| {
+                                        ui.label(egui::RichText::new("Total Size").size(14.0).weak());
+                                        ui.label(egui::RichText::new(Self::format_size(result.analysis.total_size)).size(24.0).strong());
                                     });
-                                    row.col(|ui| { ui.label(self.format_size(file.size)); });
-                                    row.col(|ui| {
-                                        let percent = if result.analysis.total_size > 0 {
-                                            file.size as f64 / result.analysis.total_size as f64
-                                        } else { 0.0 };
-                                        let bar = egui::ProgressBar::new(percent as f32).show_percentage().animate(false);
-                                        ui.add(bar);
-                                    });
-                                    row.col(|ui| { 
-                                        if file.is_dir {
-                                            ui.label(file.file_count.to_string());
-                                        } else {
-                                            ui.label("-");
-                                        }
-                                    });
-                                    row.col(|ui| { ui.label(self.format_date(file.modified)); });
                                 });
-                            }
+                            
+                            ui.add_space(10.0);
+
+                            // Card 2: Total Files
+                            egui::Frame::group(ui.style())
+                                .fill(ui.style().visuals.faint_bg_color)
+                                .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.noninteractive.bg_stroke.color))
+                                .rounding(egui::Rounding::same(4.0))
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.vertical(|ui| {
+                                        ui.label(egui::RichText::new("Total Files").size(14.0).weak());
+                                        ui.label(egui::RichText::new(result.analysis.total_files.to_string()).size(24.0).strong());
+                                    });
+                                });
                         });
+
+                        ui.add_space(40.0);
+
+                        // Right side: Chart
+                        ui.vertical(|ui| {
+                            ui.heading("File Type Distribution");
+                            ui.add_space(10.0);
+                            
+                            let mut extensions: Vec<_> = result.analysis.extension_distribution.iter().collect();
+                            extensions.sort_by(|a, b| b.1.size.cmp(&a.1.size));
+                            let top_extensions: Vec<_> = extensions.into_iter().take(10).collect();
+
+                            // Prepare data for donut chart
+                            let chart_data: Vec<(String, u64, egui::Color32)> = top_extensions.iter().enumerate().map(|(i, (ext, stats))| {
+                                let hue = (i as f32 * 0.61803398875) % 1.0;
+                                let color = egui::Color32::from(egui::ecolor::Hsva::new(hue, 0.85, 0.9, 1.0));
+                                (format!(".{}", ext), stats.size, color)
+                            }).collect();
+
+                            // Draw Donut Chart
+                            let height = 230.0; // Increased height to fit legend
+                            let width = 500.0;
+                            let (rect, _response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+                            
+                            let center = rect.min + egui::vec2(height / 2.0 + 20.0, height / 2.0);
+                            let radius = height / 2.0 - 10.0;
+                            let inner_radius = radius * 0.6;
+                            
+                            let painter = ui.painter();
+                            let total_size: u64 = chart_data.iter().map(|(_, s, _)| *s).sum();
+                            let mut current_angle = -std::f32::consts::FRAC_PI_2;
+
+                            for (_name, size, color) in &chart_data {
+                                if total_size > 0 {
+                                    let percentage = *size as f64 / total_size as f64;
+                                    let angle_span = percentage as f32 * std::f32::consts::TAU;
+                                    
+                                    if angle_span > 0.0 {
+                                        let steps = (angle_span * radius).max(2.0) as usize;
+                                        
+                                        for i in 0..steps {
+                                            let a0 = current_angle + (i as f32 / steps as f32) * angle_span;
+                                            let a1 = current_angle + ((i + 1) as f32 / steps as f32) * angle_span;
+                                            
+                                            let p0_out = center + egui::vec2(a0.cos(), a0.sin()) * radius;
+                                            let p1_out = center + egui::vec2(a1.cos(), a1.sin()) * radius;
+                                            let p0_in = center + egui::vec2(a0.cos(), a0.sin()) * inner_radius;
+                                            let p1_in = center + egui::vec2(a1.cos(), a1.sin()) * inner_radius;
+                                            
+                                            painter.add(egui::Shape::convex_polygon(
+                                                vec![p0_out, p1_out, p1_in, p0_in],
+                                                *color,
+                                                egui::Stroke::NONE
+                                            ));
+                                        }
+                                        current_angle += angle_span;
+                                    }
+                                }
+                            }
+
+                            // Legend
+                            let legend_rect = egui::Rect::from_min_size(
+                                rect.min + egui::vec2(height + 40.0, 0.0),
+                                egui::vec2(rect.width() - (height + 40.0), height)
+                            );
+                            
+                            ui.allocate_new_ui(egui::UiBuilder::new().max_rect(legend_rect), |ui| {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    for (name, size, color) in &chart_data {
+                                        ui.horizontal(|ui| {
+                                            let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                                            ui.painter().rect_filled(r, 2.0, *color);
+                                            ui.label(egui::RichText::new(format!("{} - {}", name, Self::format_size(*size))).size(14.0));
+                                        });
+                                    }
+                                });
+                            });
+                        });
+                    });
+                    
+                    ui.add_space(20.0);
+
+                    // --- File Browser ---
+                    // Filter files
+                    let mut files: Vec<FileStats> = result.files.iter()
+                        .filter(|f| self.filter_text.is_empty() || f.name.to_lowercase().contains(&self.filter_text.to_lowercase()))
+                        .cloned()
+                        .collect();
+
+                    // Sort files
+                    files.sort_by(|a, b| {
+                        let cmp = match self.sort_column {
+                            SortColumn::Name => a.name.cmp(&b.name),
+                            SortColumn::Size => a.size.cmp(&b.size),
+                            SortColumn::Count => a.file_count.cmp(&b.file_count),
+                            SortColumn::Modified => a.modified.cmp(&b.modified),
+                        };
+                        if self.sort_descending { cmp.reverse() } else { cmp }
+                    });
+
+                    ui.push_id("file_browser", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.heading("File Browser");
+                            if let Some(parent) = std::path::Path::new(&self.current_path).parent() {
+                                if ui.button("⬆ Up").clicked() {
+                                    *next_path.borrow_mut() = Some(parent.to_string_lossy().to_string());
+                                }
+                            }
+                            ui.add_space(20.0);
+                            ui.label("Filter:");
+                            ui.add(egui::TextEdit::singleline(&mut self.filter_text).hint_text("Search..."));
+                        });
+                        ui.label(egui::RichText::new(&self.current_path).weak());
+                        ui.add_space(5.0);
+
+                        TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .vscroll(false) // Disable internal scroll, use outer ScrollArea
+                            .min_scrolled_height(0.0) // Allow table to be as tall as needed
+                            .column(Column::remainder().at_least(250.0).resizable(true)) // Name
+                            .column(Column::auto().at_least(120.0).resizable(true)) // Size
+                            .column(Column::auto().at_least(100.0).resizable(true)) // Usage %
+                            .column(Column::auto().at_least(100.0).resizable(true))  // Count
+                            .column(Column::auto().at_least(140.0).resizable(true)) // Modified
+                            .header(20.0, |mut header| {
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Filename ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Name; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Storage Usage ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Size; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { ui.label(egui::RichText::new("Usage %").heading().size(14.0)); });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("File Count ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Count; self.sort_descending = !self.sort_descending; } });
+                                header.col(|ui| { if ui.add(egui::Button::new(egui::RichText::new("Last Modified ↕").heading().size(14.0)).frame(false)).clicked() { self.sort_column = SortColumn::Modified; self.sort_descending = !self.sort_descending; } });
+                            })
+                            .body(|mut body| {
+                                for file in &files {
+                                    body.row(20.0, |mut row| {
+                                        row.col(|ui| {
+                                            let icon = if file.is_dir { "📁" } else { "📄" };
+                                            if file.is_dir {
+                                                if ui.add(egui::Button::new(egui::RichText::new(format!("{} {}", icon, file.name)).color(egui::Color32::from_rgb(100, 150, 255))).frame(false)).clicked() {
+                                                    *next_path.borrow_mut() = Some(file.path.clone());
+                                                }
+                                            } else {
+                                                ui.label(format!("{} {}", icon, file.name));
+                                            }
+                                        });
+                                        row.col(|ui| { 
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                ui.label(Self::format_size(file.size)); 
+                                            });
+                                        });
+                                        row.col(|ui| {
+                                            let percent = if result.analysis.total_size > 0 {
+                                                file.size as f64 / result.analysis.total_size as f64
+                                            } else { 0.0 };
+                                            let bar = egui::ProgressBar::new(percent as f32)
+                                                .show_percentage()
+                                                .fill(egui::Color32::from_rgb(0, 120, 215)) // Blue color
+                                                .animate(false);
+                                            ui.add(bar);
+                                        });
+                                        row.col(|ui| { 
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if file.is_dir {
+                                                    ui.label(file.file_count.to_string());
+                                                } else {
+                                                    ui.label("-");
+                                                }
+                                            });
+                                        });
+                                        row.col(|ui| { ui.label(self.format_date(file.modified)); })
+                                            .1
+                                            .context_menu(|ui| {
+                                                if ui.button("Open").clicked() {
+                                                    Self::open_path(&file.path);
+                                                    ui.close_menu();
+                                                }
+                                                if ui.button("Open in Explorer").clicked() {
+                                                    #[cfg(target_os = "windows")]
+                                                    std::process::Command::new("explorer")
+                                                        .arg("/select,")
+                                                        .arg(&file.path)
+                                                        .spawn()
+                                                        .ok();
+                                                    ui.close_menu();
+                                                }
+                                            });
+                                    });
+                                }
+                            });
+                    });
+
+                    ui.add_space(20.0);
                 });
 
                 // Handle navigation clicks (hacky workaround for closure capture)

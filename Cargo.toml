@@ -15,6 +15,7 @@ env_logger = "0.10"
 num_cpus = "1.0"
 rfd = "0.14"
 egui_extras = "0.29.1"
+egui_plot = "0.29.0"
 image = "0.25.9"
 
 [build-dependencies]
